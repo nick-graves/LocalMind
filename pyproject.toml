@@ -1,0 +1,8 @@
+[project]
+name = "LocalMind"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["psutil>=5.9","pydantic>=2.7","requests>=2.32","rich>=13.7"]
+
+[project.scripts]
+LocalMind = "LocalMind.cli:main"
