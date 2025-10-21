@@ -47,10 +47,9 @@
   </style>
 </head>
 <body>
-<!-- Make the grid fill the viewport so children can scroll --> <!-- CHANGED -->
-<div class="h-screen grid grid-cols-[280px_1fr]"> <!-- CHANGED (was h-full) -->
+<div class="h-screen grid grid-cols-[280px_1fr]">
   <!-- Sidebar (ChatGPT-like) -->
-  <aside class="hidden md:flex flex-col bg-[#0F1012] border-r border-white/5 overflow-y-auto"> <!-- CHANGED -->
+  <aside class="hidden md:flex flex-col bg-[#0F1012] border-r border-white/5 overflow-y-auto">
     <div class="p-3">
       <button id="newChat" class="w-full flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-3 py-2 text-sm">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5"/></svg>
@@ -66,13 +65,11 @@
   </aside>
 
   <!-- Main column -->
-  <!-- Allow children (chat area) to shrink and scroll by setting min-h-0 --> <!-- CHANGED -->
-  <div class="flex flex-col h-full min-h-0"> <!-- CHANGED -->
+  <div class="flex flex-col h-full min-h-0">
     <!-- Top bar -->
     <header class="sticky top-0 z-10 bg-gradient-to-b from-[rgba(19,20,22,.9)] to-[rgba(19,20,22,.6)] backdrop-blur border-b border-white/5">
       <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
         <div class="h-8 w-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-300">
-          <!-- Logo-ish knot -->
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a5 5 0 0 1 5 5v2h-2V7a3 3 0 0 0-6 0v10a3 3 0 0 0 6 0v-2h2v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5Z"/></svg>
         </div>
         <h1 class="font-semibold">LocalMind</h1>
@@ -81,7 +78,6 @@
     </header>
 
     <!-- Chat area -->
-    <!-- Give chat its own scroll container and allow it to shrink --> <!-- CHANGED -->
     <main id="chat" class="flex-1 overflow-y-auto min-h-0 overscroll-contain">
       <div id="bottomSentinel" class="h-0"></div>
     </main>
@@ -183,8 +179,8 @@
     const html = md(text);
     const row = messageRow(role, html);
     const sentinel = document.getElementById('bottomSentinel');
-    chatEl.insertBefore(row, sentinel);      // CHANGED: insert before bottom
-    scrollToBottom('smooth');                // CHANGED: smooth for full messages
+    chatEl.insertBefore(row, sentinel);
+    scrollToBottom('smooth');
   }
 
   function addTyping(){
@@ -192,8 +188,8 @@
     const row = messageRow('assistant', html);
     row.id = 'typingRow';
     const sentinel = document.getElementById('bottomSentinel');
-    chatEl.insertBefore(row, sentinel);      // CHANGED: insert before bottom
-    scrollToBottom('auto');                  // CHANGED: instant for frequent updates
+    chatEl.insertBefore(row, sentinel);
+    scrollToBottom('auto');
   }
   function clearTyping(){
     const r = document.getElementById('typingRow');
@@ -214,8 +210,7 @@
   }
 
   function renderConvo(){
-    // CHANGED: reset to contain only the bottom sentinel, then re-add messages
-    chatEl.innerHTML = '\n<div id="bottomSentinel" class="h-0"></div>';  // CHANGED
+    chatEl.innerHTML = '\n<div id="bottomSentinel" class="h-0"></div>';
     (convo.messages||[]).forEach(m=> addMsg(m.role, m.content));
   }
 
@@ -250,7 +245,6 @@
   });
 
   regenBtn.addEventListener('click', async ()=>{
-    // Resend the last user message
     const lastUser = [...convo.messages].reverse().find(m=>m.role==='user');
     if(lastUser){ input.value = lastUser.content; form.requestSubmit(); }
   });
@@ -260,7 +254,7 @@
     const q = (input.value||'').trim();
     if(!q) return;
 
-    // UI updates
+    // UI: add the user message locally first
     addMsg('user', q);
     convo.messages.push({role:'user', content:q});
     save();
@@ -269,15 +263,29 @@
     sendBtn.disabled = true; setStatus('Thinking…'); addTyping();
 
     try{
+      // >>> CHANGED: send full conversation for context
       const res = await fetch(localStorage.getItem('LOCALMIND_API') || API, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message:q })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages: convo.messages }) // CHANGED
       });
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+
       clearTyping();
+
+      // Render assistant reply from server
       const answer = data.answer_markdown || '_(no response)_';
       addMsg('assistant', answer);
-      convo.messages.push({role:'assistant', content:answer});
+
+      // >>> CHANGED: sync local conversation with server's messages,
+      // removing a leading system message (server inserts it each call)
+      if (Array.isArray(data.messages)) {
+        const srv = data.messages;
+        const normalized = (srv.length && srv[0]?.role === 'system') ? srv.slice(1) : srv;
+        convo.messages = normalized;
+      }
+
       save();
       regenBtn.classList.remove('hidden');
     }catch(err){

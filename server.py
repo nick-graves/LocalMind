@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 class ChatRequest(BaseModel):
-    message: str
+    messages: List[Dict[str, Any]]
 
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]
@@ -80,12 +80,9 @@ def _extract_tool_invocations(resp_json: Dict[str, Any]):
                 pass
     return invocations
 
-def run_localmind_chat(question: str) -> Dict[str, Any]:
+def run_localmind_chat(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = Ollama()
-    messages: List[Dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
-    ]
+    messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
     # First assistant turn
     resp = client.chat_with_tools(messages, tools=TOOL_SPEC)
@@ -114,5 +111,5 @@ def run_localmind_chat(question: str) -> Dict[str, Any]:
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    result = run_localmind_chat(req.message)
+    result = run_localmind_chat(req.messages)
     return ChatResponse(**result)
