@@ -16,7 +16,7 @@ class Ollama:
             "model": self.model,
             "messages": messages,
             "tools": tools,
-            "tool_choice": "required",
+            "tool_choice": "auto",
             "temperature": 0.0,
             "stream": False
         }

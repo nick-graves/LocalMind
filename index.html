@@ -2,167 +2,295 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>LocalMind — Web Console</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LocalMind — Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Layout */
-    body { background: #0b1020; display: flex; flex-direction: column; height: 100vh; }
-    main#chat { flex: 1; overflow-y: auto; padding-bottom: 140px; }
-    footer { position: sticky; bottom: 0; background: #0b1020; padding: 1rem 0; border-top: 1px solid rgba(255,255,255,0.1); }
+    :root{
+      --bg:#131416; --panel:#1E1F23; --muted:#A9AFBC; --ring:#3E88F7; --accent:#10A37F;
+    }
+    html,body{height:100%}
+    body{
+      background:var(--bg);
+      color:#ECEDEE;
+      font-family:Inter,system-ui,ui-sans-serif,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      /* REMOVED overflow:hidden so panes can scroll */ /* CHANGED */
+    }
+    /* Scrollbars */
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-thumb{background:#2A2C31;border-radius:999px}
+    ::-webkit-scrollbar-track{background:transparent}
 
-    /* Chat look */
-    .bubble { 
-      /* keep bubbles within viewport, but allow comfy reading width */
-      max-width: min(92vw, 80ch);
-      overflow: hidden;             /* ensure children don’t spill */
-      border-radius: 1rem;
-    }
-    .msg pre {
-      /* contain code fences INSIDE the bubble and give them their own scrollbars */
-      background: #0f172a;
-      padding: 12px;
-      border-radius: 10px;
-      margin: 0.5rem 0;
-      max-width: 100%;
-      max-height: 50vh;            /* vertical cap so tall blocks don’t push UI */
-      overflow: auto;               /* both axes -> scrollbar appears under the code */
-    }
-    /* inline code should wrap instead of running off the edge */
-    .msg :not(pre) > code {
-      background: rgba(255,255,255,0.07);
-      padding: 2px 5px;
-      border-radius: 6px;
-      white-space: break-spaces;    /* wrap long inline code */
-      word-break: break-word;
-    }
-    /* ensure pre > code doesn’t double-wrap (keep normal pre behavior) */
-    .msg pre code {
-      white-space: pre;
-      word-break: normal;
-    }
+    /* Message bubbles */
+    .bubble{max-width:min(85ch,92vw)}
+    .msg .prose pre{background:#0B1018;border:1px solid #1F2937;border-radius:.75rem;padding:1rem;overflow:auto}
+    .msg .prose code:not(pre code){background:rgba(255,255,255,.06);padding:.15rem .35rem;border-radius:.375rem}
 
-    /* Optional: nicer small scrollbars inside code blocks */
-    .msg pre::-webkit-scrollbar { height: 8px; width: 8px; }
-    .msg pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 8px; }
-    .msg pre::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); }
+    /* Typing dots */
+    .dots{display:inline-flex;gap:6px}
+    .dots div{width:6px;height:6px;background:#c1c7d0;border-radius:999px;animation:bounce 1.2s infinite}
+    .dots div:nth-child(2){animation-delay:.2s}
+    .dots div:nth-child(3){animation-delay:.4s}
+    @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
 
-    /* Keep previous theme bits */
-    .spinner { border: 3px solid rgba(255,255,255,0.15); border-left-color: white; border-radius: 50%; width: 18px; height: 18px; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Input area like ChatGPT */
+    .composer{box-shadow:0 0 0 1px rgba(148,163,184,.15),0 2px 10px rgba(0,0,0,.35);}
+    .composer:focus-within{box-shadow:0 0 0 1px var(--ring),0 0 0 3px rgba(62,136,247,.25)}
+
+    .btn{transition:transform .15s ease,opacity .2s ease}
+    .btn:disabled{opacity:.5}
+    .btn:not(:disabled):active{transform:scale(.97)}
   </style>
 </head>
-<body class="text-slate-100">
-  <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
-    <header class="flex items-center gap-3 py-2 px-4">
-      <div class="w-9 h-9 rounded-xl bg-indigo-600 grid place-items-center font-bold">LM</div>
-      <div>
-        <h1 class="text-xl font-semibold">LocalMind</h1>
-        <p class="text-slate-400 text-sm">Local, read-only system assistant (Windows)</p>
+<body>
+<!-- Make the grid fill the viewport so children can scroll --> <!-- CHANGED -->
+<div class="h-screen grid grid-cols-[280px_1fr]"> <!-- CHANGED (was h-full) -->
+  <!-- Sidebar (ChatGPT-like) -->
+  <aside class="hidden md:flex flex-col bg-[#0F1012] border-r border-white/5 overflow-y-auto"> <!-- CHANGED -->
+    <div class="p-3">
+      <button id="newChat" class="w-full flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-3 py-2 text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5"/></svg>
+        New chat
+      </button>
+    </div>
+    <div class="px-3 pb-3 text-xs uppercase tracking-wide text-white/40">Recent</div>
+    <nav id="history" class="flex-1 overflow-y-auto space-y-1 px-3 pb-3"></nav>
+    <div class="border-t border-white/5 p-3 text-xs text-white/40">
+      API: <code id="apiLabel"></code>
+      <button id="setApi" class="ml-2 underline">set</button>
+    </div>
+  </aside>
+
+  <!-- Main column -->
+  <!-- Allow children (chat area) to shrink and scroll by setting min-h-0 --> <!-- CHANGED -->
+  <div class="flex flex-col h-full min-h-0"> <!-- CHANGED -->
+    <!-- Top bar -->
+    <header class="sticky top-0 z-10 bg-gradient-to-b from-[rgba(19,20,22,.9)] to-[rgba(19,20,22,.6)] backdrop-blur border-b border-white/5">
+      <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div class="h-8 w-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-300">
+          <!-- Logo-ish knot -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a5 5 0 0 1 5 5v2h-2V7a3 3 0 0 0-6 0v10a3 3 0 0 0 6 0v-2h2v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5Z"/></svg>
+        </div>
+        <h1 class="font-semibold">LocalMind</h1>
+        <div class="ml-auto text-xs text-white/50">Local LLM</div>
       </div>
     </header>
 
-    <main id="chat" class="space-y-4 px-4">
-      <div class="flex gap-3">
-        <div class="w-8 h-8 rounded-full bg-indigo-600 grid place-items-center">LM</div>
-        <div class="bubble bg-slate-800/60 rounded-2xl px-4 py-3 msg">
-          <div class="prose prose-invert">
-            <p>Hi! Ask me about your system. For example:</p>
-            <ul>
-              <li><code>Why is my computer slow?</code></li>
-              <li><code>How much storage is free?</code></li>
-              <li><code>Find my file: CS_tool_idea.jpg</code></li>
-            </ul>
-          </div>
-        </div>
-      </div>
+    <!-- Chat area -->
+    <!-- Give chat its own scroll container and allow it to shrink --> <!-- CHANGED -->
+    <main id="chat" class="flex-1 overflow-y-auto min-h-0 overscroll-contain">
+      <div id="bottomSentinel" class="h-0"></div>
     </main>
 
-    <footer class="w-full px-4">
-      <form id="composer" class="flex items-center gap-2 max-w-4xl mx-auto">
-        <input id="prompt" type="text" autocomplete="off"
-          placeholder="Type your message…"
-          class="flex-1 rounded-xl bg-slate-800/70 px-4 py-3 outline-none focus:ring-2 ring-indigo-500" />
-        <button id="send" type="submit"
-          class="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-3 font-medium">Send</button>
-      </form>
-      <div id="status" class="h-6 mt-2 text-sm text-slate-400 text-center"></div>
+    <!-- Footer composer -->
+    <footer class="sticky bottom-0 z-10">
+      <div class="max-w-3xl mx-auto px-4 pb-6 pt-2">
+        <div id="status" class="h-6 text-center text-xs text-white/50"></div>
+        <form id="composer" class="composer bg-[rgba(25,26,30,.9)] rounded-2xl p-2 md:p-3">
+          <div class="flex items-end gap-2">
+            <textarea id="prompt" rows="1" placeholder="Message LocalMind" autocomplete="off"
+              class="flex-1 bg-transparent resize-none outline-none placeholder-white/40 px-3 py-2 text-[15px] leading-6 max-h-40"></textarea>
+            <button id="send" type="submit" title="Send" class="btn shrink-0 rounded-xl bg-[var(--accent)] hover:opacity-90 px-3.5 py-2 text-sm font-semibold">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>
+            </button>
+          </div>
+          <div class="flex items-center justify-between px-1 pt-1 text-[11px] text-white/40">
+            <div>Press <kbd class="px-1 rounded bg-white/10">Enter</kbd> to send • <kbd class="px-1 rounded bg-white/10">Shift</kbd>+<kbd class="px-1 rounded bg-white/10">Enter</kbd> for new line</div>
+            <button id="regen" type="button" class="hidden underline">Regenerate response</button>
+          </div>
+        </form>
+      </div>
     </footer>
   </div>
+</div>
 
-  <script>
-    const API = localStorage.getItem("LOCALMIND_API") || "http://127.0.0.1:8000/chat";
-    const chat = document.getElementById("chat");
-    const form = document.getElementById("composer");
-    const input = document.getElementById("prompt");
-    const btn = document.getElementById("send");
-    const status = document.getElementById("status");
+<script>
+  // ====== Config / State ======
+  const API = localStorage.getItem("LOCALMIND_API") || "http://127.0.0.1:8000/chat";
+  const chatEl = document.getElementById("chat");
+  const historyEl = document.getElementById("history");
+  const apiLabel = document.getElementById("apiLabel");
+  const setApiBtn = document.getElementById("setApi");
+  const newBtn = document.getElementById("newChat");
+  const form = document.getElementById("composer");
+  const input = document.getElementById("prompt");
+  const sendBtn = document.getElementById("send");
+  const statusEl = document.getElementById("status");
+  const regenBtn = document.getElementById("regen");
 
-    function md(html) { return marked.parse(html || ""); }
+  apiLabel.textContent = API;
 
-    function addMsg(role, text) {
-      const row = document.createElement("div");
-      row.className = "flex gap-3 " + (role === "user" ? "justify-end" : "");
-      const avatar = document.createElement("div");
-      avatar.className = "w-8 h-8 rounded-full " + (role === "user" ? "bg-slate-700" : "bg-indigo-600") + " grid place-items-center";
-      avatar.textContent = role === "user" ? "U" : "LM";
+  marked.setOptions({ breaks:true, gfm:true });
 
-      const bubble = document.createElement("div");
-      bubble.className = "bubble rounded-2xl px-4 py-3 msg " +
-        (role === "user" ? "bg-slate-700/70" : "bg-slate-800/60");
-      const prose = document.createElement("div");
-      prose.className = "prose prose-invert";
-      prose.innerHTML = md(text);
-      bubble.appendChild(prose);
+  let conversations = JSON.parse(localStorage.getItem("LM_CONVOS") || "[]");
+  let convo = conversations[0] || { id: crypto.randomUUID(), title: "New chat", messages: [] };
 
-      if (role === "user") {
-        row.appendChild(bubble);
-        row.appendChild(avatar);
-      } else {
-        row.appendChild(avatar);
-        row.appendChild(bubble);
-      }
-      chat.appendChild(row);
-      chat.scrollTop = chat.scrollHeight;
-    }
+  // ====== Helpers ======
+  const md = (s) => marked.parse(s || "");
 
-    function addSpinner() {
-      const wrap = document.createElement("div");
-      wrap.id = "spinner";
-      wrap.className = "flex items-center justify-center gap-2 text-slate-400 mt-2";
-      wrap.innerHTML = `<div class="spinner"></div><span>Thinking…</span>`;
-      status.innerHTML = "";
-      status.appendChild(wrap);
-    }
-    function clearSpinner() { status.innerHTML = ""; }
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const q = (input.value || "").trim();
-      if (!q) return;
-      addMsg("user", q);
-      input.value = "";
-      btn.disabled = true;
-      addSpinner();
-
-      try {
-        const res = await fetch(API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: q })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        addMsg("assistant", data.answer_markdown || "_(no response)_");
-      } catch (err) {
-        addMsg("assistant", `Failed to reach LocalMind API: \`${String(err)}\``);
-      } finally {
-        clearSpinner();
-        btn.disabled = false;
-        input.focus();
-      }
+  function scrollToBottom(behavior = 'auto') {
+    const sentinel = document.getElementById('bottomSentinel');
+    if (!sentinel) return;
+    requestAnimationFrame(() => {
+      sentinel.scrollIntoView({ behavior, block: 'end' });
+      chatEl.scrollTo({ top: chatEl.scrollHeight, behavior });
     });
-  </script>
+  }
+
+  function save(){
+    // First message becomes title (trim to 32 chars)
+    if(convo.messages.length>0){
+      const first = (convo.messages.find(m=>m.role==='user')?.content || 'New chat').replace(/\n+/g,' ').trim();
+      convo.title = first.slice(0,32) + (first.length>32?'…':'');
+    }
+    const idx = conversations.findIndex(c=>c.id===convo.id);
+    if(idx===-1) conversations.unshift(convo); else conversations[idx]=convo;
+    localStorage.setItem("LM_CONVOS", JSON.stringify(conversations.slice(0,30)));
+    renderHistory();
+  }
+
+  function avatar(role){
+    if(role==='assistant'){
+      return `<div class="mt-1 h-7 w-7 rounded bg-emerald-500/20 text-emerald-300 flex items-center justify-center">`+
+             `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a5 5 0 0 1 5 5v2h-2V7a3 3 0 0 0-6 0v10a3 3 0 0 0 6 0v-2h 2v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5Z"/></svg>`+
+             `</div>`;
+    }
+    return `<div class="mt-1 h-7 w-7 rounded bg-white/10 text-white/70 flex items-center justify-center">`+
+           `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z"/></svg>`+
+           `</div>`;
+  }
+
+  function messageRow(role, html){
+    const wrap = document.createElement('div');
+    wrap.className = `msg w-full`;
+    wrap.innerHTML = `
+      <div class="w-full">
+        <div class="max-w-3xl mx-auto px-4 py-6">
+          <div class="flex items-start gap-4 ${role==='user'?'':'bg-white/[.03] rounded-2xl p-5'}">
+            ${avatar(role)}
+            <div class="bubble prose prose-invert max-w-none text-[15px] leading-7">${html}</div>
+          </div>
+        </div>
+      </div>`;
+    return wrap;
+  }
+
+  function addMsg(role, text){
+    const html = md(text);
+    const row = messageRow(role, html);
+    const sentinel = document.getElementById('bottomSentinel');
+    chatEl.insertBefore(row, sentinel);      // CHANGED: insert before bottom
+    scrollToBottom('smooth');                // CHANGED: smooth for full messages
+  }
+
+  function addTyping(){
+    const html = `<div class="dots" aria-label="Assistant is typing"><div></div><div></div><div></div></div>`;
+    const row = messageRow('assistant', html);
+    row.id = 'typingRow';
+    const sentinel = document.getElementById('bottomSentinel');
+    chatEl.insertBefore(row, sentinel);      // CHANGED: insert before bottom
+    scrollToBottom('auto');                  // CHANGED: instant for frequent updates
+  }
+  function clearTyping(){
+    const r = document.getElementById('typingRow');
+    if(r) r.remove();
+  }
+
+  function setStatus(t){ statusEl.textContent = t || '' }
+
+  function renderHistory(){
+    historyEl.innerHTML = '';
+    conversations.forEach(c=>{
+      const a = document.createElement('button');
+      a.className = "w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-white/10 truncate";
+      a.textContent = c.title || 'Untitled';
+      a.onclick = () => { loadConvo(c.id) };
+      historyEl.appendChild(a);
+    });
+  }
+
+  function renderConvo(){
+    // CHANGED: reset to contain only the bottom sentinel, then re-add messages
+    chatEl.innerHTML = '\n<div id="bottomSentinel" class="h-0"></div>';  // CHANGED
+    (convo.messages||[]).forEach(m=> addMsg(m.role, m.content));
+  }
+
+  function loadConvo(id){
+    const found = conversations.find(c=>c.id===id);
+    if(!found) return;
+    convo = JSON.parse(JSON.stringify(found));
+    renderConvo();
+  }
+
+  function resetChat(){
+    convo = { id: crypto.randomUUID(), title: 'New chat', messages: [] };
+    renderConvo();
+    save();
+  }
+
+  // ====== Events ======
+  setApiBtn.onclick = () => {
+    const v = prompt('LocalMind API URL', localStorage.getItem('LOCALMIND_API') || API);
+    if(v){ localStorage.setItem('LOCALMIND_API', v); apiLabel.textContent = v; }
+  };
+
+  newBtn.onclick = resetChat;
+
+  input.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); form.requestSubmit(); }
+  });
+  input.addEventListener('input', ()=>{
+    input.style.height='auto';
+    const h = Math.min(input.scrollHeight, 160);
+    input.style.height = h+'px';
+  });
+
+  regenBtn.addEventListener('click', async ()=>{
+    // Resend the last user message
+    const lastUser = [...convo.messages].reverse().find(m=>m.role==='user');
+    if(lastUser){ input.value = lastUser.content; form.requestSubmit(); }
+  });
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const q = (input.value||'').trim();
+    if(!q) return;
+
+    // UI updates
+    addMsg('user', q);
+    convo.messages.push({role:'user', content:q});
+    save();
+
+    input.value='';
+    sendBtn.disabled = true; setStatus('Thinking…'); addTyping();
+
+    try{
+      const res = await fetch(localStorage.getItem('LOCALMIND_API') || API, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message:q })
+      });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      clearTyping();
+      const answer = data.answer_markdown || '_(no response)_';
+      addMsg('assistant', answer);
+      convo.messages.push({role:'assistant', content:answer});
+      save();
+      regenBtn.classList.remove('hidden');
+    }catch(err){
+      clearTyping();
+      addMsg('assistant', `Failed to reach LocalMind API.\n\n\`${String(err)}\``);
+    }finally{
+      sendBtn.disabled = false; setStatus(''); input.focus();
+    }
+  });
+
+  // ====== Init ======
+  renderHistory();
+  renderConvo();
+</script>
 </body>
 </html>
