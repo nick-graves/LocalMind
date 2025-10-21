@@ -17,6 +17,7 @@ class Ollama:
             "messages": messages,
             "tools": tools,
             "tool_choice": "required",
+            "temperature": 0.0,
             "stream": False
         }
 

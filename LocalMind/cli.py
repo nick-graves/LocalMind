@@ -12,6 +12,7 @@ SYSTEM_PROMPT = (
   "You are LocalMind, a read-only Windows system assistant. "
   "When you need system data, YOU MUST use function/tool calling. "
   "Do not merely describe the tool call in text—return a formal tool call. "
+  "Return tool calls in tool_calls only. Do not place JSON in content. Use JSON booleans true/false. "
   "Prefer structured evidence (PIDs, percentages, sizes) before concluding."
 )
 TOOL_SPEC = [

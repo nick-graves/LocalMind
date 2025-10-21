@@ -50,3 +50,4 @@ def wifi_info(timeout_seconds: int = 6):
         return {"ok": False, "error": "timeout"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+    

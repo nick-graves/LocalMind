@@ -30,41 +30,52 @@ class ChatResponse(BaseModel):
     answer_markdown: str
 
 def _extract_tool_invocations(resp_json: Dict[str, Any]):
+    """
+    Return a list of {"id": str, "name": str, "arguments": str} from different response shapes.
+    """
     invocations = []
-    msg = (resp_json.get("choices", [{}])[0] or {}).get("message", {}) or {}
+    msg = (resp_json.get("choices", [{}])[0]
+                  .get("message", {}))
 
-    # OpenAI multi-tool format
+    # 1) OpenAI multi-tool format
     tc = msg.get("tool_calls") or []
     for i, t in enumerate(tc):
-        fn = (t or {}).get("function", {})
+        fn = t.get("function", {})
         invocations.append({
-            "id": t.get("id", f"call_{i}"),
+            "id": t.get("id", f"tool_{i}"),
             "name": fn.get("name"),
             "arguments": fn.get("arguments") or "{}",
         })
+    if invocations:
+        return invocations
 
-    # Fallback: single function_call (older shape)
-    if not invocations:
-        fc = msg.get("function_call")
-        if fc and isinstance(fc, dict) and fc.get("name"):
-            invocations.append({
-                "id": "func_0",
-                "name": fc["name"],
-                "arguments": fc.get("arguments") or "{}",
-            })
+    # 2) Older single function_call format
+    fc = msg.get("function_call")
+    if fc and isinstance(fc, dict) and fc.get("name"):
+        invocations.append({
+            "id": "func_0",
+            "name": fc["name"],
+            "arguments": fc.get("arguments") or "{}",
+        })
+        return invocations
 
-    # Fallback: JSON-in-content
-    if not invocations:
-        content = msg.get("content") or ""
-        if "{" in content and "}" in content and '"name"' in content:
+    # 3) Plain-text fallback: look for {"name": "...", "parameters": {...}} in content
+    content = msg.get("content") or ""
+    if "{" in content and "}" in content and '''"name"''' in content:
+        import re, json
+        # very small, safe JSON sniffer (first balanced object-ish)
+        match = re.search(r'(\{.*"name"\s*:\s*".*?".*\})', content, re.DOTALL)
+        if match:
+            blob = match.group(1)
             try:
-                obj = json.loads(content)
-                if isinstance(obj, dict) and "name" in obj:
-                    invocations.append({
-                        "id": "text_0",
-                        "name": obj["name"],
-                        "arguments": json.dumps(obj.get("parameters") or obj.get("arguments") or {}),
-                    })
+                obj = json.loads(blob)
+                name = obj.get("name")
+                args = obj.get("parameters") or obj.get("arguments") or {}
+                invocations.append({
+                    "id": "text_0",
+                    "name": name,
+                    "arguments": json.dumps(args),
+                })
             except Exception:
                 pass
     return invocations

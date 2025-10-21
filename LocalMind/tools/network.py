@@ -29,3 +29,6 @@ def network_activity(only_established: bool = True, top_n: int = 50) -> List[Dic
         if len(rows) >= top_n:
             break
     return rows
+
+
+print(network_activity(True, 10))
