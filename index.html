@@ -18,29 +18,20 @@
       background:var(--bg);
       color:#ECEDEE;
       font-family:Inter,system-ui,ui-sans-serif,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
-      /* REMOVED overflow:hidden so panes can scroll */ /* CHANGED */
     }
-    /* Scrollbars */
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#2A2C31;border-radius:999px}
     ::-webkit-scrollbar-track{background:transparent}
-
-    /* Message bubbles */
     .bubble{max-width:min(85ch,92vw)}
     .msg .prose pre{background:#0B1018;border:1px solid #1F2937;border-radius:.75rem;padding:1rem;overflow:auto}
     .msg .prose code:not(pre code){background:rgba(255,255,255,.06);padding:.15rem .35rem;border-radius:.375rem}
-
-    /* Typing dots */
     .dots{display:inline-flex;gap:6px}
     .dots div{width:6px;height:6px;background:#c1c7d0;border-radius:999px;animation:bounce 1.2s infinite}
     .dots div:nth-child(2){animation-delay:.2s}
     .dots div:nth-child(3){animation-delay:.4s}
     @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
-
-    /* Input area like ChatGPT */
     .composer{box-shadow:0 0 0 1px rgba(148,163,184,.15),0 2px 10px rgba(0,0,0,.35);}
     .composer:focus-within{box-shadow:0 0 0 1px var(--ring),0 0 0 3px rgba(62,136,247,.25)}
-
     .btn{transition:transform .15s ease,opacity .2s ease}
     .btn:disabled{opacity:.5}
     .btn:not(:disabled):active{transform:scale(.97)}
@@ -48,7 +39,7 @@
 </head>
 <body>
 <div class="h-screen grid grid-cols-[280px_1fr]">
-  <!-- Sidebar (ChatGPT-like) -->
+  <!-- Sidebar -->
   <aside class="hidden md:flex flex-col bg-[#0F1012] border-r border-white/5 overflow-y-auto">
     <div class="p-3">
       <button id="newChat" class="w-full flex items-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 px-3 py-2 text-sm">
@@ -66,7 +57,6 @@
 
   <!-- Main column -->
   <div class="flex flex-col h-full min-h-0">
-    <!-- Top bar -->
     <header class="sticky top-0 z-10 bg-gradient-to-b from-[rgba(19,20,22,.9)] to-[rgba(19,20,22,.6)] backdrop-blur border-b border-white/5">
       <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
         <div class="h-8 w-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-300">
@@ -77,12 +67,10 @@
       </div>
     </header>
 
-    <!-- Chat area -->
     <main id="chat" class="flex-1 overflow-y-auto min-h-0 overscroll-contain">
       <div id="bottomSentinel" class="h-0"></div>
     </main>
 
-    <!-- Footer composer -->
     <footer class="sticky bottom-0 z-10">
       <div class="max-w-3xl mx-auto px-4 pb-6 pt-2">
         <div id="status" class="h-6 text-center text-xs text-white/50"></div>
@@ -119,7 +107,6 @@
   const regenBtn = document.getElementById("regen");
 
   apiLabel.textContent = API;
-
   marked.setOptions({ breaks:true, gfm:true });
 
   let conversations = JSON.parse(localStorage.getItem("LM_CONVOS") || "[]");
@@ -138,7 +125,6 @@
   }
 
   function save(){
-    // First message becomes title (trim to 32 chars)
     if(convo.messages.length>0){
       const first = (convo.messages.find(m=>m.role==='user')?.content || 'New chat').replace(/\n+/g,' ').trim();
       convo.title = first.slice(0,32) + (first.length>32?'…':'');
@@ -198,15 +184,121 @@
 
   function setStatus(t){ statusEl.textContent = t || '' }
 
+  // === Delete chat ===
+  function deleteConvo(id){
+    const idx = conversations.findIndex(c=>c.id===id);
+    if(idx === -1) return;
+
+    const isCurrent = conversations[idx].id === convo.id;
+    conversations.splice(idx, 1);
+
+    localStorage.setItem("LM_CONVOS", JSON.stringify(conversations.slice(0,30)));
+
+    if(isCurrent){
+      if(conversations.length){
+        convo = JSON.parse(JSON.stringify(conversations[0]));
+      } else {
+        convo = { id: crypto.randomUUID(), title: 'New chat', messages: [] };
+      }
+      renderConvo();
+    }
+
+    renderHistory();
+  }
+
+  function closeAllMenus(){
+    document.querySelectorAll('.history-menu').forEach(m => m.classList.add('hidden'));
+  }
+
+  // === Sidebar list with hover-highlight & auto-close menu ===
   function renderHistory(){
     historyEl.innerHTML = '';
+
+    // Helper: close all menus except (optionally) one to keep open
+    const closeOthers = (keepMenu = null) => {
+      document.querySelectorAll('.history-menu').forEach(m => {
+        if (m !== keepMenu) {
+          const parent = m.closest('.chat-item');
+          if (parent) parent.classList.remove('bg-white/10');
+          m.classList.add('hidden');
+        }
+      });
+    };
+
     conversations.forEach(c=>{
-      const a = document.createElement('button');
-      a.className = "w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-white/10 truncate";
-      a.textContent = c.title || 'Untitled';
-      a.onclick = () => { loadConvo(c.id) };
-      historyEl.appendChild(a);
+      const item = document.createElement('div');
+      item.className = "chat-item group relative flex items-center rounded-lg hover:bg-white/10";
+
+      const selectBtn = document.createElement('button');
+      selectBtn.className = "flex-1 text-left text-sm px-3 py-2 truncate";
+      selectBtn.textContent = c.title || 'Untitled';
+      selectBtn.onclick = () => { loadConvo(c.id) };
+
+      const kebab = document.createElement('button');
+      kebab.className = "opacity-0 group-hover:opacity-100 transition-opacity absolute right-1 p-1 rounded hover:bg-white/10";
+      kebab.setAttribute('aria-label', 'Chat options');
+      kebab.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+        </svg>`;
+
+      const menu = document.createElement('div');
+      menu.className = "history-menu hidden absolute right-0 top-8 z-20 w-40 rounded-lg border border-white/10 bg-[#17181B] shadow-xl";
+      menu.innerHTML = `
+        <button data-id="${c.id}" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 rounded-t-lg">
+          Delete chat
+        </button>
+      `;
+
+      // Toggle menu; keep row highlighted while open
+      kebab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = menu.classList.contains('hidden');
+        closeOthers(willOpen ? menu : null);
+        if (willOpen) {
+          item.classList.add('bg-white/10');
+          menu.classList.remove('hidden');
+          kebab.focus();
+        } else {
+          item.classList.remove('bg-white/10');
+          menu.classList.add('hidden');
+        }
+      });
+
+      // Auto-close when mouse leaves the row
+      item.addEventListener('mouseleave', () => {
+        item.classList.remove('bg-white/10');
+        menu.classList.add('hidden');
+      });
+
+      // Auto-close when focus leaves the row (keyboard navigation)
+      item.addEventListener('focusout', (e) => {
+        if (!item.contains(e.relatedTarget)) {
+          item.classList.remove('bg-white/10');
+          menu.classList.add('hidden');
+        }
+      });
+
+      // Delete handler
+      menu.querySelector('button').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = e.currentTarget.getAttribute('data-id');
+        menu.classList.add('hidden');
+        item.classList.remove('bg-white/10');
+        deleteConvo(id);
+      });
+
+      // Prevent bubbling from menu
+      menu.addEventListener('click', (e) => e.stopPropagation());
+
+      item.appendChild(selectBtn);
+      item.appendChild(kebab);
+      item.appendChild(menu);
+      historyEl.appendChild(item);
     });
+
+    // Close if clicking elsewhere
+    document.addEventListener('click', () => closeOthers(), { once: true });
   }
 
   function renderConvo(){
@@ -249,12 +341,12 @@
     if(lastUser){ input.value = lastUser.content; form.requestSubmit(); }
   });
 
+  // Send full conversation to server (persistence)
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const q = (input.value||'').trim();
     if(!q) return;
 
-    // UI: add the user message locally first
     addMsg('user', q);
     convo.messages.push({role:'user', content:q});
     save();
@@ -263,23 +355,19 @@
     sendBtn.disabled = true; setStatus('Thinking…'); addTyping();
 
     try{
-      // >>> CHANGED: send full conversation for context
       const res = await fetch(localStorage.getItem('LOCALMIND_API') || API, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages: convo.messages }) // CHANGED
+        body: JSON.stringify({ messages: convo.messages })
       });
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
       clearTyping();
 
-      // Render assistant reply from server
       const answer = data.answer_markdown || '_(no response)_';
       addMsg('assistant', answer);
 
-      // >>> CHANGED: sync local conversation with server's messages,
-      // removing a leading system message (server inserts it each call)
       if (Array.isArray(data.messages)) {
         const srv = data.messages;
         const normalized = (srv.length && srv[0]?.role === 'system') ? srv.slice(1) : srv;
