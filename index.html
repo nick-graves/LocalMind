@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>LocalMind — Web Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* Layout */
+    body { background: #0b1020; display: flex; flex-direction: column; height: 100vh; }
+    main#chat { flex: 1; overflow-y: auto; padding-bottom: 140px; }
+    footer { position: sticky; bottom: 0; background: #0b1020; padding: 1rem 0; border-top: 1px solid rgba(255,255,255,0.1); }
+
+    /* Chat look */
+    .bubble { 
+      /* keep bubbles within viewport, but allow comfy reading width */
+      max-width: min(92vw, 80ch);
+      overflow: hidden;             /* ensure children don’t spill */
+      border-radius: 1rem;
+    }
+    .msg pre {
+      /* contain code fences INSIDE the bubble and give them their own scrollbars */
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 10px;
+      margin: 0.5rem 0;
+      max-width: 100%;
+      max-height: 50vh;            /* vertical cap so tall blocks don’t push UI */
+      overflow: auto;               /* both axes -> scrollbar appears under the code */
+    }
+    /* inline code should wrap instead of running off the edge */
+    .msg :not(pre) > code {
+      background: rgba(255,255,255,0.07);
+      padding: 2px 5px;
+      border-radius: 6px;
+      white-space: break-spaces;    /* wrap long inline code */
+      word-break: break-word;
+    }
+    /* ensure pre > code doesn’t double-wrap (keep normal pre behavior) */
+    .msg pre code {
+      white-space: pre;
+      word-break: normal;
+    }
+
+    /* Optional: nicer small scrollbars inside code blocks */
+    .msg pre::-webkit-scrollbar { height: 8px; width: 8px; }
+    .msg pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 8px; }
+    .msg pre::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); }
+
+    /* Keep previous theme bits */
+    .spinner { border: 3px solid rgba(255,255,255,0.15); border-left-color: white; border-radius: 50%; width: 18px; height: 18px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="text-slate-100">
+  <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
+    <header class="flex items-center gap-3 py-2 px-4">
+      <div class="w-9 h-9 rounded-xl bg-indigo-600 grid place-items-center font-bold">LM</div>
+      <div>
+        <h1 class="text-xl font-semibold">LocalMind</h1>
+        <p class="text-slate-400 text-sm">Local, read-only system assistant (Windows)</p>
+      </div>
+    </header>
+
+    <main id="chat" class="space-y-4 px-4">
+      <div class="flex gap-3">
+        <div class="w-8 h-8 rounded-full bg-indigo-600 grid place-items-center">LM</div>
+        <div class="bubble bg-slate-800/60 rounded-2xl px-4 py-3 msg">
+          <div class="prose prose-invert">
+            <p>Hi! Ask me about your system. For example:</p>
+            <ul>
+              <li><code>Why is my computer slow?</code></li>
+              <li><code>How much storage is free?</code></li>
+              <li><code>Find my file: CS_tool_idea.jpg</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="w-full px-4">
+      <form id="composer" class="flex items-center gap-2 max-w-4xl mx-auto">
+        <input id="prompt" type="text" autocomplete="off"
+          placeholder="Type your message…"
+          class="flex-1 rounded-xl bg-slate-800/70 px-4 py-3 outline-none focus:ring-2 ring-indigo-500" />
+        <button id="send" type="submit"
+          class="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-3 font-medium">Send</button>
+      </form>
+      <div id="status" class="h-6 mt-2 text-sm text-slate-400 text-center"></div>
+    </footer>
+  </div>
+
+  <script>
+    const API = localStorage.getItem("LOCALMIND_API") || "http://127.0.0.1:8000/chat";
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("composer");
+    const input = document.getElementById("prompt");
+    const btn = document.getElementById("send");
+    const status = document.getElementById("status");
+
+    function md(html) { return marked.parse(html || ""); }
+
+    function addMsg(role, text) {
+      const row = document.createElement("div");
+      row.className = "flex gap-3 " + (role === "user" ? "justify-end" : "");
+      const avatar = document.createElement("div");
+      avatar.className = "w-8 h-8 rounded-full " + (role === "user" ? "bg-slate-700" : "bg-indigo-600") + " grid place-items-center";
+      avatar.textContent = role === "user" ? "U" : "LM";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble rounded-2xl px-4 py-3 msg " +
+        (role === "user" ? "bg-slate-700/70" : "bg-slate-800/60");
+      const prose = document.createElement("div");
+      prose.className = "prose prose-invert";
+      prose.innerHTML = md(text);
+      bubble.appendChild(prose);
+
+      if (role === "user") {
+        row.appendChild(bubble);
+        row.appendChild(avatar);
+      } else {
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+      }
+      chat.appendChild(row);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function addSpinner() {
+      const wrap = document.createElement("div");
+      wrap.id = "spinner";
+      wrap.className = "flex items-center justify-center gap-2 text-slate-400 mt-2";
+      wrap.innerHTML = `<div class="spinner"></div><span>Thinking…</span>`;
+      status.innerHTML = "";
+      status.appendChild(wrap);
+    }
+    function clearSpinner() { status.innerHTML = ""; }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = (input.value || "").trim();
+      if (!q) return;
+      addMsg("user", q);
+      input.value = "";
+      btn.disabled = true;
+      addSpinner();
+
+      try {
+        const res = await fetch(API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: q })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        addMsg("assistant", data.answer_markdown || "_(no response)_");
+      } catch (err) {
+        addMsg("assistant", `Failed to reach LocalMind API: \`${String(err)}\``);
+      } finally {
+        clearSpinner();
+        btn.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>

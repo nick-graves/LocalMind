@@ -103,6 +103,60 @@ TOOL_SPEC = [
         "required": ["query"]
         }
     }  
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_large_files",
+      "description": "Find largest files and (optionally) folders under given roots. Read-only, bounded by timeout.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "top_n": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 },
+          "include_folders": { "type": "boolean", "default": False },
+          "roots": { "type": "array", "items": { "type": "string" } },
+          "timeout_seconds": { "type": "integer", "minimum": 2, "maximum": 60, "default": 10 }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "wifi_info",
+      "description": "List nearby Wi-Fi networks with SSID, BSSID, signal percent, channel, auth and encryption.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "timeout_seconds": { "type": "integer", "minimum": 2, "maximum": 20, "default": 6 }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_system_info",
+      "description": "Windows system info: version, uptime, CPU, memory, GPU names. Read-only.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_scheduled_tasks",
+      "description": "List Windows Scheduled Tasks (read-only): name, path, enabled, state, next/last run, triggers, actions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name_pattern": { "type": "string", "description": "Case-insensitive substring or regex to match TaskName." },
+          "include_disabled": { "type": "boolean", "default": True },
+          "folder": { "type": "string", "description": "Filter by TaskPath folder, e.g. '\\\\Microsoft\\\\Windows'." },
+          "max_results": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 },
+          "timeout_seconds": { "type": "integer", "minimum": 2, "maximum": 30, "default": 6 }
+        }
+      }
+    }
   }
 
 ]
