@@ -1,4 +1,5 @@
 import json, os, sys
+from pathlib import Path
 from rich.console import Console
 from LocalMind.llm.ollama_client import Ollama
 from LocalMind.mcp_server import dispatch_tool_call
@@ -8,13 +9,16 @@ VERBOSE = os.getenv("LOCALMIND_DEBUG", "1") == "1"
 
 console = Console()
 
-SYSTEM_PROMPT = (
-  "You are LocalMind, a read-only Windows system assistant. "
-  "When you need system data, YOU MUST use function/tool calling. "
-  "Do not merely describe the tool call in text—return a formal tool call. "
-  "Return tool calls in tool_calls only. Do not place JSON in content. Use JSON booleans true/false. "
-  "Prefer structured evidence (PIDs, percentages, sizes) before concluding."
-)
+def load_system_prompt(path: str = "system_prompt.txt") -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except Exception as e:
+        print(f"[warning] Could not load system prompt from {path}: {e}")
+        return "You are LocalMind, a read-only Windows system assistant."
+
+SYSTEM_PROMPT = load_system_prompt()
+
+
 TOOL_SPEC = [
   {
     "type": "function",

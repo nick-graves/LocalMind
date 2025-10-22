@@ -13,25 +13,66 @@
     :root{
       --bg:#131416; --panel:#1E1F23; --muted:#A9AFBC; --ring:#3E88F7; --accent:#10A37F;
     }
+
     html,body{height:100%}
+
     body{
       background:var(--bg);
       color:#ECEDEE;
       font-family:Inter,system-ui,ui-sans-serif,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
     }
+
+    /* Scrollbars */
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#2A2C31;border-radius:999px}
     ::-webkit-scrollbar-track{background:transparent}
-    .bubble{max-width:min(85ch,92vw)}
-    .msg .prose pre{background:#0B1018;border:1px solid #1F2937;border-radius:.75rem;padding:1rem;overflow:auto}
-    .msg .prose code:not(pre code){background:rgba(255,255,255,.06);padding:.15rem .35rem;border-radius:.375rem}
+
+    /* Message bubbles + content */
+    .bubble{
+      max-width:min(85ch,100%);           /* cap to column, not viewport */
+    }
+
+    .msg .prose{
+      overflow-wrap:anywhere;              /* allow breaks inside long tokens */
+      word-break:break-word;               /* fallback */
+    }
+
+    /* Code blocks: keep inside bubble, scroll horizontally if needed */
+    .msg .prose pre{
+      background:#0B1018;
+      border:1px solid #1F2937;
+      border-radius:.75rem;
+      padding:1rem;
+      max-width:100%;
+      overflow-x:auto;                     /* key change */
+      overflow-y:auto;
+    }
+
+    /* Inline code: also allow long tokens to wrap */
+    .msg .prose code:not(pre code){
+      background:rgba(255,255,255,.06);
+      padding:.15rem .35rem;
+      border-radius:.375rem;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+
+    /* Prevent wide content from overflowing bubble */
+    .msg .prose table{display:block;max-width:100%;overflow-x:auto}
+    .msg .prose img{max-width:100%;height:auto}
+
+    /* Typing dots */
     .dots{display:inline-flex;gap:6px}
     .dots div{width:6px;height:6px;background:#c1c7d0;border-radius:999px;animation:bounce 1.2s infinite}
     .dots div:nth-child(2){animation-delay:.2s}
     .dots div:nth-child(3){animation-delay:.4s}
     @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
-    .composer{box-shadow:0 0 0 1px rgba(148,163,184,.15),0 2px 10px rgba(0,0,0,.35);}
+
+    /* Composer (input area) */
+    .composer{box-shadow:0 0 0 1px rgba(148,163,184,.15),0 2px 10px rgba(0,0,0,.35)}
     .composer:focus-within{box-shadow:0 0 0 1px var(--ring),0 0 0 3px rgba(62,136,247,.25)}
+
+    /* Buttons */
     .btn{transition:transform .15s ease,opacity .2s ease}
     .btn:disabled{opacity:.5}
     .btn:not(:disabled):active{transform:scale(.97)}
